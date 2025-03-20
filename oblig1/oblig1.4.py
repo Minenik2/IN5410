@@ -120,45 +120,34 @@ def calculate_neighborhood_cost():
 neighborhood_cost = calculate_neighborhood_cost()
 print(f"Total Energy Cost for the Neighborhood: {neighborhood_cost:.2f} NOK")
 
-# Plotting (same as before)
-def plot_schedule():
-    # For simplicity, we can just plot a random schedule for the first household
-    non_shiftable_schedule = generate_non_shiftable_schedule()  # Generate non-shiftable schedule
-    result, shiftable_appliances_list = optimize_schedule()
+def plot_neighborhood_schedule():
+    total_non_shiftable_schedule = np.zeros(num_hours)
+    total_shiftable_schedule = np.zeros(num_hours)
 
-    if result.success:
-        shiftable_schedule = np.array(result.x).reshape(len(shiftable_appliances_list), num_hours)
+    # Accumulate schedules for all households
+    for _ in range(num_households):
+        non_shiftable_schedule = generate_non_shiftable_schedule()  # (Appliance count x Hours)
+        total_non_shiftable_schedule += np.sum(non_shiftable_schedule, axis=0)  # Sum across appliances
 
-        # Combine schedules into one unified matrix
-        total_schedule = np.vstack((non_shiftable_schedule, shiftable_schedule))
-        all_appliances = list(non_shiftable_appliances.keys()) + shiftable_appliances_list
+        result, shiftable_appliances_list = optimize_schedule()
+        if result.success:
+            shiftable_schedule = np.array(result.x).reshape(len(shiftable_appliances_list), num_hours)
+            total_shiftable_schedule += np.sum(shiftable_schedule, axis=0)  # Sum across appliances
 
-        # Compute total power consumption per hour
-        total_power_usage = np.sum(total_schedule, axis=0)
+    total_power_usage = total_non_shiftable_schedule + total_shiftable_schedule
 
-        # Plot appliance usage as continuous curves
-        plt.figure(figsize=(12, 6))
+    # Plot results
+    plt.figure(figsize=(12, 6))
+    
+    plt.plot(range(num_hours), total_power_usage, label="Total Energy Consumption", color="red", linewidth=2.5)
+    plt.plot(range(num_hours), pricing_curve * 10, label="RTP Price (scaled)", color="black", linestyle="dashdot", alpha=0.7)
 
-        # Plot non-shiftable appliances
-        for i, appliance in enumerate(non_shiftable_appliances.keys()):
-            plt.plot(range(num_hours), non_shiftable_schedule[i], label=f"{appliance} (fixed)", linestyle="dotted")
+    plt.xlabel("Hour of the Day")
+    plt.ylabel("Power Usage (kWh)")
+    plt.title("Optimized Neighborhood Energy Consumption vs. RTP Pricing")
+    plt.legend()
+    plt.grid()
+    plt.show()
 
-        # Plot shiftable appliances
-        for i, appliance in enumerate(shiftable_appliances_list):
-            plt.plot(range(num_hours), shiftable_schedule[i], label=f"{appliance} (optimized)")
-
-        # Overlay the RTP curve
-        plt.plot(range(num_hours), pricing_curve * 10, label="RTP Price (scaled)", color="black", linestyle="dashdot", alpha=0.7)
-        
-        # Plot total power consumption as a smooth curve
-        plt.plot(range(num_hours), total_power_usage, label="Total Energy Consumption", color="red", linewidth=2.5, alpha=0.8)
-
-        plt.xlabel("Hour of the Day")
-        plt.ylabel("Power Usage (kWh)")
-        plt.title("Optimized Appliance Scheduling vs. RTP Pricing")
-        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-        plt.grid()
-        plt.show()
-
-# Plotting the schedule for one household as an example
-plot_schedule()
+# Call the function to visualize the neighborhood's energy consumption
+plot_neighborhood_schedule()
