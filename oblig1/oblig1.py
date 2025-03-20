@@ -130,6 +130,9 @@ if result.success:
 
     # Overlay the RTP curve
     plt.plot(range(num_hours), pricing_curve * 10, label="RTP Price (scaled)", color="black", linestyle="dashdot", alpha=0.7)
+    
+    # Plot total power consumption as a smooth curve
+    plt.plot(range(num_hours), total_power_usage, label="Total Energy Consumption", color="red", linewidth=2.5, alpha=0.8)
 
     plt.xlabel("Hour of the Day")
     plt.ylabel("Power Usage (kWh)")
