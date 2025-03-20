@@ -46,30 +46,18 @@ def generate_rtp():
 
 pricing_curve = generate_rtp()
 
-# Visualize the pricing curve
-plt.plot(range(num_hours), pricing_curve, label="RTP Pricing Curve")
-plt.xlabel("Hour of the Day")
-plt.ylabel("Cost per kWh (NOK)")
-plt.title("Real-Time Pricing (RTP) Curve")
-plt.legend()
-plt.show()
-
-# **Schedule Non-Shiftable Appliances (Fixed Usage)**
+# Schedule Non-Shiftable Appliances
 non_shiftable_schedule = np.zeros((len(non_shiftable_appliances), num_hours))
 
 for i, (appliance, details) in enumerate(non_shiftable_appliances.items()):
     start, end = details["start"], details["end"]
     non_shiftable_schedule[i, start:end] = 1  # Always ON during this period
 
-# **Optimize Scheduling for Shiftable Appliances**
+# Optimize Scheduling for Shiftable Appliances
 def optimize_schedule():
     appliances_list = list(shiftable_appliances.keys())
     num_appliances = len(appliances_list)
 
-    # **Decision Variables: x_ij where**
-    # - i = appliance index
-    # - j = hour of the day
-    # Total number of decision variables = num_appliances * num_hours
     c = []  # Cost coefficients
     A_eq = []
     b_eq = []
@@ -90,12 +78,12 @@ def optimize_schedule():
 
         # Constraint: Appliance should run for its required energy level
         constraint_row = [0] * (num_appliances * num_hours)  # Full zero row
-        for t in range(start, end):  # Only allow usage in its valid hours
+        for t in range(start, end):  # Only allow usage in valid hours
             constraint_row[i * num_hours + t] = 1  # Select variables for this appliance
 
         A_eq.append(constraint_row)
         b_eq.append(power)  # Required energy per appliance
-        
+
     # Build inequality constraints for max power limit per hour
     for t in range(num_hours):
         for i, appliance in enumerate(appliances_list):
@@ -112,48 +100,43 @@ def optimize_schedule():
 
     return result, appliances_list
 
-# **RUN OPTIMIZATION**
+# Run Optimization
 result, shiftable_appliances_list = optimize_schedule()
 
-# **OUTPUT RESULTS**
+# Output Results
 if result.success:
     print(f"\nOptimal cost: {result.fun:.2f} NOK\n")
 
     # Extract scheduling decisions
     shiftable_schedule = np.array(result.x).reshape(len(shiftable_appliances_list), num_hours)
 
-    # Print schedule for non-shiftable appliances
-    print("\nNon-Shiftable Appliance Scheduling (Fixed Times):\n")
-    for i, (appliance, details) in enumerate(non_shiftable_appliances.items()):
-        print(f"{appliance:<20}: ", end="")
-        for hour in range(num_hours):
-            if non_shiftable_schedule[i, hour] > 0:
-                print("█", end="")  # Visual block for active hours
-            else:
-                print(" ", end="")
-        print(f" ({details['power']:.2f} kWh)")
+    # Combine schedules into one unified matrix
+    total_schedule = np.vstack((non_shiftable_schedule, shiftable_schedule))
+    all_appliances = list(non_shiftable_appliances.keys()) + shiftable_appliances_list
 
-    # Print schedule for shiftable appliances
-    print("\nShiftable Appliance Scheduling (Optimized):\n")
-    for i, appliance in enumerate(shiftable_appliances_list):
-        print(f"{appliance:<20}: ", end="")
-        for hour in range(num_hours):
-            if shiftable_schedule[i, hour] > 0.01:  # Avoid floating-point precision issues
-                print("█", end="")  # Visual block for active hours
-            else:
-                print(" ", end="")
-        print(f" ({sum(shiftable_schedule[i]) * shiftable_appliances[appliance]['power']:.2f} kWh)")
+    # Compute total power consumption per hour
+    total_power_usage = np.sum(total_schedule, axis=0)
 
-    # **PLOT HEATMAP**
+    # Plot appliance usage as continuous curves
     plt.figure(figsize=(12, 6))
-    plt.imshow(np.vstack((non_shiftable_schedule, shiftable_schedule)), aspect="auto", cmap="Blues", interpolation="nearest")
-    plt.colorbar(label="Appliance Usage (0 = Off, 1 = 1 kWh)")
-    plt.yticks(range(len(non_shiftable_appliances) + len(shiftable_appliances)), 
-               list(non_shiftable_appliances.keys()) + list(shiftable_appliances.keys()))
-    plt.xticks(range(num_hours), range(num_hours))
+
+    # Plot non-shiftable appliances
+    for i, appliance in enumerate(non_shiftable_appliances.keys()):
+        plt.plot(range(num_hours), non_shiftable_schedule[i], label=f"{appliance} (fixed)", linestyle="dotted")
+
+    # Plot shiftable appliances
+    for i, appliance in enumerate(shiftable_appliances_list):
+        plt.plot(range(num_hours), shiftable_schedule[i], label=f"{appliance} (optimized)")
+
+    # Overlay the RTP curve
+    plt.plot(range(num_hours), pricing_curve * 10, label="RTP Price (scaled)", color="black", linestyle="dashdot", alpha=0.7)
+
     plt.xlabel("Hour of the Day")
-    plt.ylabel("Appliance")
-    plt.title("Optimal Appliance Scheduling with Fixed Non-Shiftable Times")
+    plt.ylabel("Power Usage (kWh)")
+    plt.title("Optimized Appliance Scheduling vs. RTP Pricing")
+    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.grid()
     plt.show()
+
 else:
     print("Optimization failed.")
